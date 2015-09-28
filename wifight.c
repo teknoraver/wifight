@@ -7,6 +7,7 @@
 #include <pcap/pcap.h>
 #include <time.h>
 #include <linux/if_ether.h>
+#include <ctype.h>
 
 struct __attribute__ ((__packed__)) radiotap {
 	uint8_t revision;
@@ -124,12 +125,11 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 {
 	char buf[ETH_FRAME_LEN] = {0};
 	struct beacon *template = (struct beacon *)buf;
-	template->radiotap.length = 0x0008;
-	template->wifi.type = 0x0080;
+	template->radiotap.length = htole16(sizeof(struct radiotap));
+	template->wifi.type = htole16(0x80);
 	memset(template->wifi.raddr, 0xff, ETH_ALEN);
-	template->mgmt.timestamp = 0x21214489;
-	template->mgmt.interval = 0x0064;
-	template->mgmt.capabilities = 0x0401;
+	template->mgmt.interval = htole16(0x64);
+	template->mgmt.capabilities = htole16(0x0401);
 	template->srate.type = 0x01;
 	template->srate.length = 0x08;
 	memcpy(template->srate.data, "\x82\x84\x8b\x96\x12\x24\x48\x6c", 8);
@@ -155,9 +155,9 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 static void ctsize(pcap_t *pcap)
 {
 	struct cts cts = {
-		.radiotap.length = 0x0008,
+		.radiotap.length = htole16(sizeof(struct radiotap)),
 		.type = 0xc4,
-		.duration = 0x7d00
+		.duration = htole16(0x7d00)
 	};
 	while(1) {
 		randaddr(cts.raddr);
@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	if(optind != argc - 1 || attack == INVALID || attack == BEACON && !lines) {
+	if(optind != argc - 1 || attack == INVALID || (attack == BEACON && !lines)) {
 		fprintf(stderr, "usage: %s -b -f <file> <iface>\n", argv[0]);
 		fprintf(stderr, "usage: %s -c <iface>\n", argv[0]);
 		return 1;
@@ -212,5 +212,9 @@ int main(int argc, char *argv[])
 		printf("CTSing on %s...\n", argv[optind]);
 		ctsize(pcap);
 		break;
+	default:
+		fprintf(stderr, "unknown attack type\n");
 	}
+
+	return 0;
 }
