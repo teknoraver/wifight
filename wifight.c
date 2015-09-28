@@ -28,7 +28,6 @@ struct __attribute__ ((__packed__)) wifi {
 struct __attribute__ ((__packed__)) tlv {
 	uint8_t type;
 	uint8_t length;
-	uint8_t data[0];
 };
 
 struct __attribute__ ((__packed__)) mgmt {
@@ -49,9 +48,14 @@ struct __attribute__ ((__packed__)) beacon {
 	struct radiotap radiotap;
 	struct wifi wifi;
 	struct mgmt mgmt;
-	struct tlv srate;
-	uint8_t srated[8];
-	struct tlv essid;
+	struct {
+		struct tlv tlv;
+		uint8_t data[8];
+	} srate;
+	struct {
+		struct tlv tlv;
+		char data[33];
+	} essid;
 };
 
 static char ** load_words(char *path, int *lines)
@@ -123,31 +127,38 @@ static inline void randaddr(uint8_t *addr)
 
 static void beaconize(pcap_t *pcap, char *words[], int lines)
 {
-	char buf[ETH_FRAME_LEN] = {0};
-	struct beacon *template = (struct beacon *)buf;
-	template->radiotap.length = htole16(sizeof(struct radiotap));
-	template->wifi.type = htole16(0x80);
-	memset(template->wifi.raddr, 0xff, ETH_ALEN);
-	template->mgmt.interval = htole16(0x64);
-	template->mgmt.capabilities = htole16(0x0401);
-	template->srate.type = 0x01;
-	template->srate.length = 0x08;
-	memcpy(template->srate.data, "\x82\x84\x8b\x96\x12\x24\x48\x6c", 8);
+	struct beacon template = {
+		.radiotap.length = htole16(sizeof(struct radiotap)),
+		.wifi = {
+			.type = htole16(0x80),
+			.raddr = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff },
+		},
+		.mgmt = {
+			.interval = htole16(0x64),
+			.capabilities = htole16(0x0401)
+		},
+		.srate = {
+			.tlv = {
+				.type = 0x01,
+				.length = 0x08,
+			},
+			.data = { 0x82, 0x84, 0x8b, 0x96, 0x12, 0x24, 0x48, 0x6c }
+		},
+	};
 
 	while(1) {
 		char *word = words[rand() % lines];
-		template->essid.length = strlen(word);
+		template.essid.tlv.length = strlen(word);
 
-		/* avoid overflows */
-		if(sizeof(*template) + template->essid.length > sizeof(buf))
+		/* maximum allowed by standard */
+		if(template.essid.tlv.length > 32)
 			continue;
 
 		/* fake but valid mac address */
-		randaddr(template->wifi.saddr);
-		*template->wifi.bssid = *template->wifi.saddr;
-		strcpy((char *)&template->essid.data, word);
-		template->essid.length = strlen(word);
-		if(!pcap_inject(pcap, template, sizeof(*template) + template->essid.length))
+		randaddr(template.wifi.saddr);
+		*template.wifi.bssid = *template.wifi.saddr;
+		strcpy(template.essid.data, word);
+		if(!pcap_inject(pcap, &template, sizeof(template) - sizeof(template.essid.data) + template.essid.tlv.length))
 			exit(0);
 	}
 }
