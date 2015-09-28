@@ -1,5 +1,5 @@
 BIN := wifight
-CFLAGS := -O2
+CFLAGS := -O2 -Wall
 LDFLAGS := -lpcap
 
 all: $(BIN)
