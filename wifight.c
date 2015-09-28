@@ -48,6 +48,8 @@ struct __attribute__ ((__packed__)) beacon {
 	struct radiotap radiotap;
 	struct wifi wifi;
 	struct mgmt mgmt;
+	struct tlv srate;
+	uint8_t srated[8];
 	struct tlv essid;
 };
 
@@ -128,6 +130,9 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 	template->mgmt.timestamp = 0x21214489;
 	template->mgmt.interval = 0x0064;
 	template->mgmt.capabilities = 0x0401;
+	template->srate.type = 0x01;
+	template->srate.length = 0x08;
+	memcpy(template->srate.data, "\x82\x84\x8b\x96\x12\x24\x48\x6c", 8);
 
 	while(1) {
 		char *word = words[rand() % lines];
