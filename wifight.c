@@ -82,7 +82,7 @@ static char ** load_words(char *path, int *lines)
 	}
 
 	/* set pointers */
-	words = malloc(*lines * sizeof(char *));
+	words = malloc(*lines * sizeof(*words));
 	for(*lines = 0, last = filecont; last < filecont + len; ) {
 		int i, len;
 		if(!*last) {
@@ -134,7 +134,7 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 		template->essid.length = strlen(word);
 
 		/* avoid overflows */
-		if(sizeof(struct beacon) + template->essid.length > sizeof(buf))
+		if(sizeof(*template) + template->essid.length > sizeof(buf))
 			continue;
 
 		/* fake but valid mac address */
