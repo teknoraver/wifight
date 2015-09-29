@@ -63,7 +63,7 @@ static char ** load_words(char *path, int *lines)
 	char **words = NULL;
 	char *filecont;
 	char *last;
-	FILE *dict = fopen(optarg, "r");
+	FILE *dict = fopen(path, "r");
 	if(!dict) {
 		perror("open");
 		exit(1);
@@ -91,7 +91,7 @@ static char ** load_words(char *path, int *lines)
 	/* set pointers */
 	words = malloc(*lines * sizeof(*words));
 	for(*lines = 0, last = filecont; last < filecont + len; ) {
-		int i, len;
+		int i;
 		if(!*last) {
 			last++;
 			continue;
@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
 {
 	char c;
 	pcap_t *pcap;
-	int lines;
+	int lines = 0;
 	char **words;
 	enum attack attack = INVALID;
 	useconds_t delay = 0;
