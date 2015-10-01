@@ -72,6 +72,9 @@ const char maligno[] = {
 	0x00, 0x01, 0x02,
 };
 
+static int packets = -1;
+static int male = 0;
+useconds_t delay = 0;
 
 static char ** load_words(char *path, int *lines)
 {
@@ -140,7 +143,7 @@ static inline void randaddr(uint8_t *addr)
 	addr[5] = rand();
 }
 
-static void beaconize(pcap_t *pcap, char *words[], int lines, useconds_t delay, int packets, int male)
+static void beaconize(pcap_t *pcap, char *words[], int lines)
 {
 	struct beacon template = {
 		.radiotap.length = htole16(sizeof(struct radiotap)),
@@ -191,7 +194,7 @@ static void beaconize(pcap_t *pcap, char *words[], int lines, useconds_t delay, 
 	}
 }
 
-static void ctsize(pcap_t *pcap, useconds_t delay, int packets)
+static void ctsize(pcap_t *pcap)
 {
 	struct cts cts = {
 		.radiotap.length = htole16(sizeof(struct radiotap)),
@@ -218,9 +221,6 @@ int main(int argc, char *argv[])
 	int lines = 0;
 	char **words;
 	enum attack attack = INVALID;
-	useconds_t delay = 0;
-	int packets = -1;
-	int male = 0;
 
 	while((c = getopt(argc, argv, "bcf:i:p:m")) != -1) {
 		switch(c) {
@@ -266,11 +266,11 @@ int main(int argc, char *argv[])
 	switch(attack) {
 	case BEACON:
 		printf("beaconing on %s...\n", argv[optind]);
-		beaconize(pcap, words, lines, delay, packets, male);
+		beaconize(pcap, words, lines);
 		break;
 	case CTS:
 		printf("CTSing on %s...\n", argv[optind]);
-		ctsize(pcap, delay, packets);
+		ctsize(pcap);
 		break;
 	default:
 		fprintf(stderr, "unknown attack type\n");
