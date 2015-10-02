@@ -12,6 +12,7 @@
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <linux/if_packet.h>
+#include <endian.h>
 
 struct __attribute__ ((__packed__)) radiotap {
 	uint8_t revision;
