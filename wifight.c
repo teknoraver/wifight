@@ -259,7 +259,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "-p packets	send `packet' packets, then exit\n");
 		return 1;
 	} else {
-		struct ifreq ifr;
+		struct ifreq ifr = { };
 		int ifl = strlen(argv[optind]);
 		if(ifl > sizeof(ifr.ifr_name)) {
 			fprintf(stderr, "interface name too long: %s\n", argv[optind]);
