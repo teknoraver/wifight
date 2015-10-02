@@ -259,12 +259,17 @@ int main(int argc, char *argv[])
 		return 1;
 	} else {
 		struct ifreq ifr;
+		int ifl = strlen(argv[optind]);
+		if(ifl > sizeof(ifr.ifr_name)) {
+			fprintf(stderr, "interface name too long: %s\n", argv[optind]);
+			return 1;
+		}
 		sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 		if(sock == -1) {
 			perror("socket");
 			return 1;
 		}
-		strcpy(ifr.ifr_name, argv[optind]);
+		strncpy(ifr.ifr_name, argv[optind], ifl);
 		if (ioctl(sock, SIOCGIFINDEX, &ifr) == -1) {
 			perror("SIOCGIFINDEX");
 			return 1;
