@@ -173,7 +173,7 @@ static void beaconize(int sock, char *words[], int lines)
 
 		/* fake but valid mac address */
 		randaddr(template.wifi.saddr);
-		*template.wifi.bssid = *template.wifi.saddr;
+		memcpy(template.wifi.bssid, template.wifi.saddr, ETH_ALEN);
 		strcpy(template.essid_data, word);
 		if(!male) {
 			if(!write(sock, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length))
