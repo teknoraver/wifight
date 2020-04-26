@@ -135,12 +135,13 @@ enum attack {
 
 static inline void randaddr(uint8_t *addr)
 {
-	addr[0] = rand() & 0xfe;
-	addr[1] = rand();
-	addr[2] = rand();
-	addr[3] = rand();
-	addr[4] = rand();
-	addr[5] = rand();
+	int *r1 = (int*)addr;
+	int r2 = random();
+
+	*r1 = random();
+	addr[0] <<= 1;
+	addr[4] = r2 >> 8;
+	addr[5] = r2;
 }
 
 static void beaconize(int sock, char *words[], int lines)
@@ -226,6 +227,7 @@ int main(int argc, char *argv[])
 		switch(c) {
 		case 'f':
 			srand(time(NULL));
+			srandom(time(NULL));
 			words = load_words(optarg, &lines);
 			printf("Loaded %d words\n", lines);
 			break;
