@@ -114,7 +114,7 @@ static char ** load_words(char *path, int *lines)
 	/* set pointers */
 	words = malloc(*lines * sizeof(*words));
 	for(*lines = 0, last = filecont; last < filecont + len; ) {
-		int i, l;
+		int l;
 		if(!*last) {
 			last++;
 			continue;
