@@ -120,11 +120,6 @@ static char ** load_words(char *path, int *lines)
 			continue;
 		}
 		l = strlen(last);
-		for(i = 0; i < l; i++)
-			if(!isalnum(last[i])) {
-				last += l;
-				continue;
-			}
 		words[(*lines)++] = last;
 		last += l + 1;
 	}
