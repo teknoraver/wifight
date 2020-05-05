@@ -217,15 +217,26 @@ static void ctsize(int sock)
 	}
 }
 
+static void __attribute__ ((noreturn)) usage(char *argv0, int ret)
+{
+	fprintf(stderr,	"usage: %s -b -f <file> <iface>\n"
+			"usage: %s -c <iface>\n"
+			"\noptional parameters:\n"
+			"-i interval	send `interval' packets per second\n"
+			"-p packets	send `packet' packets, then exit\n",
+			argv0, argv0);
+	exit(ret);
+}
+
 int main(int argc, char *argv[])
 {
-	char c;
+	int c;
 	int sock;
 	int lines = 0;
 	char **words = NULL;
 	enum attack attack = INVALID;
 
-	while ((c = getopt(argc, argv, "bcf:i:p:m")) != -1) {
+	while ((c = getopt(argc, argv, "hbcf:i:p:m")) != -1) {
 		switch (c) {
 		case 'f':
 			srand(time(NULL));
@@ -248,19 +259,14 @@ int main(int argc, char *argv[])
 		case 'm':
 			male = 1;
 			break;
+		case 'h':
+			usage(argv[0], 0);
 		}
 	}
 	if (optind != argc - 1 || attack == INVALID || (attack == BEACON && !lines)) {
-		fprintf(stderr,	"usage: %s -b -f <file> <iface>\n"
-				"usage: %s -c <iface>\n"
-				"\noptional parameters:\n"
-				"-i interval	send `interval' packets per second\n"
-				"-p packets	send `packet' packets, then exit\n",
-				argv[0],  argv[0]);
-
-		return 1;
+		usage(argv[0], 1);
 	} else {
-		struct ifreq ifr = { };
+		struct ifreq ifr = { 0 };
 		int ifl = strlen(argv[optind]);
 		if (ifl > sizeof(ifr.ifr_name)) {
 			fprintf(stderr, "interface name too long: %s\n", argv[optind]);
