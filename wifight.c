@@ -273,9 +273,7 @@ int main(int argc, char *argv[])
 	} else {
 		struct sockaddr_ll sa = {
 			.sll_family = AF_PACKET,
-			.sll_protocol = htons(ETH_P_ALL),
 			.sll_ifindex = if_nametoindex(argv[optind]),
-			.sll_pkttype = PACKET_HOST
 		};
 
 		if (!sa.sll_ifindex) {
@@ -283,7 +281,7 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 
-		sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+		sock = socket(AF_PACKET, SOCK_RAW, 0);
 		if (sock == -1) {
 			perror("socket");
 			return 1;
