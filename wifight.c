@@ -177,8 +177,8 @@ static void beaconize(int sock, char *words[], int lines)
 		memcpy(template.wifi.bssid, template.wifi.saddr, ETH_ALEN);
 		strcpy(template.essid_data, word);
 		if (!male) {
-			if (write(sock, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length) == -1) {
-				perror("write");
+			if (send(sock, &template, sizeof(template) - sizeof(template.essid_data) + template.essid.length, 0) == -1) {
+				perror("send");
 				exit(1);
 			}
 		} else {
@@ -186,8 +186,8 @@ static void beaconize(int sock, char *words[], int lines)
 			char buffer[size + sizeof(maligno)];
 			memcpy(buffer, &template, size);
 			memcpy(buffer + size, maligno, sizeof(maligno));
-			if (write(sock, buffer, sizeof(buffer)) == -1) {
-				perror("write");
+			if (send(sock, buffer, sizeof(buffer), 0) == -1) {
+				perror("send");
 				exit(1);
 			}
 		}
@@ -210,8 +210,8 @@ static void ctsize(int sock)
 
 	while (packets) {
 		randaddr(cts.raddr);
-		if (write(sock, &cts, sizeof(cts)) == -1) {
-			perror("write");
+		if (send(sock, &cts, sizeof(cts), 0) == -1) {
+			perror("send");
 			exit(1);
 		}
 
