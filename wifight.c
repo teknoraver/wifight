@@ -275,6 +275,7 @@ int main(int argc, char *argv[])
 			.sll_family = AF_PACKET,
 			.sll_ifindex = if_nametoindex(argv[optind]),
 		};
+		int enable = 1;
 
 		if (!sa.sll_ifindex) {
 			perror("if_nametoindex");
@@ -284,6 +285,11 @@ int main(int argc, char *argv[])
 		sock = socket(AF_PACKET, SOCK_RAW, 0);
 		if (sock == -1) {
 			perror("socket");
+			return 1;
+		}
+
+		if (setsockopt(sock, SOL_PACKET, PACKET_QDISC_BYPASS, (char *)&enable, sizeof(enable)) < 0) {
+			perror("setsockopt(PACKET_QDISC_BYPASS)");
 			return 1;
 		}
 
