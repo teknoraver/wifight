@@ -10,7 +10,6 @@
 #include <ctype.h>
 #include <arpa/inet.h>
 #include <net/if.h>
-#include <sys/ioctl.h>
 #include <linux/if_packet.h>
 #include <endian.h>
 
@@ -272,28 +271,24 @@ int main(int argc, char *argv[])
 	if (optind != argc - 1 || attack == INVALID || (attack == BEACON && !lines)) {
 		usage(argv[0], 1);
 	} else {
-		struct ifreq ifr = { 0 };
-		int ifl = strlen(argv[optind]);
-		if (ifl > sizeof(ifr.ifr_name)) {
-			fprintf(stderr, "interface name too long: %s\n", argv[optind]);
-			return 1;
+		struct sockaddr_ll sa = {
+			.sll_family = AF_PACKET,
+			.sll_protocol = htons(ETH_P_ALL),
+			.sll_ifindex = if_nametoindex(argv[optind]),
+			.sll_pkttype = PACKET_HOST
+		};
+
+		if (!sa.sll_ifindex) {
+			perror("if_nametoindex");
+			exit(1);
 		}
+
 		sock = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 		if (sock == -1) {
 			perror("socket");
 			return 1;
 		}
-		strncpy(ifr.ifr_name, argv[optind], ifl);
-		if (ioctl(sock, SIOCGIFINDEX, &ifr) == -1) {
-			perror("SIOCGIFINDEX");
-			return 1;
-		}
-		struct sockaddr_ll sa = {
-			.sll_family = AF_PACKET,
-			.sll_protocol = htons(ETH_P_ALL),
-			.sll_ifindex = ifr.ifr_ifindex,
-			.sll_pkttype = PACKET_HOST
-		};
+
 		bind(sock, (struct sockaddr *)&sa, sizeof(sa));
 	}
 
