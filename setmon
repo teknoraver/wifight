@@ -1,0 +1,19 @@
+#!/bin/sh
+
+dev=$1
+
+if ! [ -d "/sys/class/net/$dev" ]; then
+	echo "Device $dev is not found"
+	exit 1
+fi
+
+if ! [ -d "/sys/class/net/$dev/wireless" ]; then
+	echo "Device $dev is not a WiFi device"
+	exit 1
+fi
+
+read state <"/sys/class/net/$dev/operstate"
+
+[ "$state" != down ] && ip link set "$dev" down
+iw dev "$dev" set monitor none
+ip link set "$dev" up
